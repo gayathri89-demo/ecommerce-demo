@@ -1,106 +1,244 @@
+const LoginPage = require('../pages/LoginPage')
+const ProductPage = require('../pages/ProductPage')
+const CartPage = require('../pages/CartPage')
+
+const loginPage = new LoginPage()
+const productPage = new ProductPage()
+const cartPage = new CartPage()
+
 describe('Sauce Demo Verification', () => {
   beforeEach(() => {
+    // Load checkout data from the fixture
+    cy.fixture('checkout').as('checkoutData')
+
+    // Login using the custom Cypress command
     cy.login()
   })
 
-  it('Login to the SauceDemo website', () => {
-    cy.get('[data-test="title"]')
-      .should('be.visible')
-      .and('have.text', 'Products')
+  // Scenario 1
+  it('Login and Verify Inventory Page', () => {
+    productPage.verifyProductsPage()
   })
 
+  // Scenario 2
   it('Product Sorting', () => {
-    // Select Price: Low to High
-    cy.get('[data-test="product-sort-container"]').select('lohi')
+    // Sort by Price: Low to High
+    productPage.selectSortingOption('lohi')
+    productPage.verifyPricesLowToHigh()
 
-    cy.get('[data-test="product-sort-container"]')
-      .should('have.value', 'lohi')
-
-    // Select Name: Z to A
-    cy.get('[data-test="product-sort-container"]').select('za')
-
-    cy.get('[data-test="product-sort-container"]')
-      .should('have.value', 'za')
+    // Sort by Name: Z to A
+    productPage.selectSortingOption('za')
+    productPage.verifyNamesZToA()
   })
 
+  // Scenario 3
   it('Product Details and Add to Cart', () => {
-    cy.url().should('include', '/inventory.html')
+    const productName = 'Sauce Labs Bolt T-Shirt'
+    const productPrice = '$15.99'
 
-    cy.get('[data-test="title"]')
-      .should('be.visible')
-      .and('have.text', 'Products')
+    const productDescription =
+      'Get your testing superhero on with the Sauce Labs bolt T-shirt. From American Apparel, 100% ringspun combed cotton, heather gray with red bolt.'
 
-    cy.contains(
-      '[data-test="inventory-item-name"]',
-      'Sauce Labs Bolt T-Shirt',
-    ).click()
+    productPage.verifyProductsPage()
 
-    cy.url().should('include', '/inventory-item.html')
+    productPage.openProduct(productName)
 
-    cy.get('[data-test="inventory-item-name"]')
-      .should('be.visible')
-      .and('have.text', 'Sauce Labs Bolt T-Shirt')
+    productPage.verifyProductDetails(
+      productName,
+      productPrice,
+      productDescription,
+    )
 
-    cy.get('[data-test="inventory-item-price"]')
-      .should('be.visible')
-      .and('have.text', '$15.99')
+    productPage.addProductFromDetailsPage()
 
-    cy.get('[data-test="inventory-item-desc"]')
-      .should('be.visible')
-      .and(
-        'have.text',
-        'Get your testing superhero on with the Sauce Labs bolt T-shirt. From American Apparel, 100% ringspun combed cotton, heather gray with red bolt.',
-      )
-
-    cy.get('[data-test="add-to-cart"]').click()
-
-    cy.get('[data-test="shopping-cart-badge"]')
-      .should('be.visible')
-      .and('have.text', '1')
+    productPage.verifyCartCount(1)
   })
 
+  // Scenario 4
   it('Cart and Checkout Validation', () => {
-    // Every test starts fresh, so add the product again
-    cy.contains(
-      '[data-test="inventory-item"]',
-      'Sauce Labs Bolt T-Shirt',
+    const productName = 'Sauce Labs Bolt T-Shirt'
+    const productPrice = '$15.99'
+
+    // Add product
+    productPage.addProduct(productName)
+    productPage.verifyCartCount(1)
+
+    // Open and verify cart
+    cartPage.openCart()
+    cartPage.verifyCartPage()
+
+    cartPage.verifyProduct(
+      productName,
+      productPrice,
     )
-      .find('button')
-      .click()
 
-    cy.get('[data-test="shopping-cart-badge"]')
-      .should('have.text', '1')
+    // Open checkout form
+    cartPage.clickCheckout()
+    cartPage.verifyCheckoutInformationPage()
 
-    cy.get('[data-test="shopping-cart-link"]').click()
+    // First Name should initially be empty
+    cartPage.verifyFirstNameIsEmpty()
 
-    cy.url().should('include', '/cart.html')
+    // Leave First Name empty intentionally
+    cy.get('@checkoutData').then((data) => {
+      cartPage.enterCheckoutDetails(
+        '',
+        data.lastName,
+        data.postalCode,
+      )
+    })
 
-    cy.get('[data-test="title"]')
-      .should('have.text', 'Your Cart')
+    cartPage.clickContinue()
 
-    cy.get('[data-test="inventory-item-name"]')
-      .should('be.visible')
-      .and('have.text', 'Sauce Labs Bolt T-Shirt')
+    // Verify required-field validation
+    cartPage.verifyValidationMessage(
+      'Error: First Name is required',
+    )
+  })
 
-    cy.get('[data-test="inventory-item-price"]')
-      .should('be.visible')
-      .and('have.text', '$15.99')
+  // Scenario 5
+  it('Complete Checkout Using Fixture Data', () => {
+    const productName = 'Sauce Labs Bolt T-Shirt'
+    const productPrice = '$15.99'
 
-    cy.get('[data-test="checkout"]').click()
+    // Add product
+    productPage.addProduct(productName)
+    productPage.verifyCartCount(1)
 
-    cy.url().should('include', '/checkout-step-one.html')
+    // Open cart and checkout
+    cartPage.openCart()
+    cartPage.verifyCartPage()
 
-    cy.get('[data-test="firstName"]')
-      .should('have.value', '')
+    cartPage.clickCheckout()
+    cartPage.verifyCheckoutInformationPage()
 
-    cy.get('[data-test="lastName"]').type('Nair')
-    cy.get('[data-test="postalCode"]').type('123456')
+    // Enter all details using fixture data
+    cy.get('@checkoutData').then((data) => {
+      cartPage.enterCheckoutDetails(
+        data.firstName,
+        data.lastName,
+        data.postalCode,
+      )
+    })
 
-    cy.get('[data-test="continue"]').click()
+    // Continue to Checkout Overview
+    cartPage.clickContinue()
+    cartPage.verifyOverviewPage()
 
-    // Required by the PDF but missing from your test
-    cy.get('[data-test="error"]')
-      .should('be.visible')
-      .and('contain.text', 'Error: First Name is required')
+    // Verify product and total
+    cartPage.verifyProduct(
+      productName,
+      productPrice,
+    )
+
+    cartPage.verifyTotalAmount()
+  })
+
+  // Scenario 6
+  it('Add Multiple Products and Remove Product', () => {
+    const firstProductName = 'Sauce Labs Backpack'
+    const firstProductPrice = '$29.99'
+
+    const secondProductName = 'Sauce Labs Bike Light'
+    const secondProductPrice = '$9.99'
+
+    // Add two products
+    productPage.addProduct(firstProductName)
+    productPage.addProduct(secondProductName)
+
+    // Verify badge shows 2
+    productPage.verifyCartCount(2)
+
+    // Open and verify cart
+    cartPage.openCart()
+    cartPage.verifyCartPage()
+
+    cartPage.verifyProduct(
+      firstProductName,
+      firstProductPrice,
+    )
+
+    cartPage.verifyProduct(
+      secondProductName,
+      secondProductPrice,
+    )
+
+    // Remove the second product
+    cartPage.removeProduct(secondProductName)
+
+    // Verify badge changes to 1
+    productPage.verifyCartCount(1)
+
+    // Verify removed product is absent
+    cartPage.verifyProductRemoved(
+      secondProductName,
+    )
+
+    // Verify first product remains
+    cartPage.verifyProduct(
+      firstProductName,
+      firstProductPrice,
+    )
+  })
+
+  // Scenario 7
+  it('Complete Order', () => {
+    const productName = 'Sauce Labs Bolt T-Shirt'
+    const productPrice = '$15.99'
+
+    // Add product
+    productPage.addProduct(productName)
+    productPage.verifyCartCount(1)
+
+    // Open and verify cart
+    cartPage.openCart()
+    cartPage.verifyCartPage()
+
+    cartPage.verifyProduct(
+      productName,
+      productPrice,
+    )
+
+    // Open checkout
+    cartPage.clickCheckout()
+    cartPage.verifyCheckoutInformationPage()
+
+    // Enter fixture data
+    cy.get('@checkoutData').then((data) => {
+      cartPage.enterCheckoutDetails(
+        data.firstName,
+        data.lastName,
+        data.postalCode,
+      )
+    })
+
+    // Continue to overview
+    cartPage.clickContinue()
+    cartPage.verifyOverviewPage()
+
+    // Verify product and total
+    cartPage.verifyProduct(
+      productName,
+      productPrice,
+    )
+
+    cartPage.verifyTotalAmount()
+
+    // Complete order
+    cartPage.clickFinish()
+
+    // Verify order confirmation
+    cartPage.verifyOrderConfirmation(
+      'Thank you for your order!',
+    )
+  })
+
+  // Scenario 8
+  it('Logout', () => {
+    // Open menu and log out
+    productPage.logout()
+
+    // Verify user returned to Login page
+    loginPage.verifyLoginPage()
   })
 })
